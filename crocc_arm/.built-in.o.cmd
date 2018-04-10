@@ -1,0 +1,1 @@
+cmd_/home/srinivasa/workspace/driver_dev/crocc_arm/built-in.o :=  rm -f /home/srinivasa/workspace/driver_dev/crocc_arm/built-in.o; arm-linux-gnueabihf-ar rcsD /home/srinivasa/workspace/driver_dev/crocc_arm/built-in.o
