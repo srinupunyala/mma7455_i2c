@@ -3,6 +3,8 @@
 #include <linux/kernel.h>
 #include <linux/cdev.h>
 #include <linux/errno.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
 
 #define MMA7455_XOUTL 0x00
 #define MMA7455_XOUTH 0x01
@@ -17,7 +19,7 @@
 #define MMA7455_WHOAMI 0x0F
 #define MMA7455_WHOAMI_ID 0x55
 
-#define ACC_DEV_NAME mma7455 
+#define ACC_DEV_NAME "mma7455" 
 
 static unsigned int acc_dev_maj = 0;
 static unsigned int minor = 0;
@@ -37,9 +39,10 @@ const struct i2c_device_id *id)
 {
 	struct mma7455 *m5_data;
 	struct i2c_msg msg;
-	struct device c_dev;
+	struct device *c_dev;
 	dev_t dev_no;	
-	unsigned int whoami;	
+	unsigned int whoami;
+	char *from_accl = NULL;	
 	int err;  /* for c dev allocation */
 	
 	if(!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_BYTE_DATA))
@@ -49,9 +52,14 @@ const struct i2c_device_id *id)
 	msg.addr = client->addr;
 	msg.flags = I2C_M_RD;
 	msg.len = 5;
-	msg.buf = whoami;
+	msg.buf = from_accl;
+	err = kstrtoint(from_accl, 16, &whoami);
+	if(err){
+		pr_err("could not convert str to long");
+		return err;
+	}
 
-	err = i2c_transfer(client->adapter, msg, 1);
+	err = i2c_transfer(client->adapter, &msg, 1);
 	if(err){
 		pr_err("i2c transfer failed");
 		return err;
@@ -77,27 +85,27 @@ const struct i2c_device_id *id)
 		goto fail;
 	}
 
-	m5_data = devm_kzalloc(&client->dev, sizeof(data), GFP_KERNEL);
-	if(!m5_data)
-		return -ENOMEM
+	m5_data = (struct mma7455 *)kzalloc(sizeof(struct mma7455), GFP_KERNEL);
+	if(m5_data == NULL)
+		return -ENOMEM;
 
-	m5_data.client = client;
+	m5_data->client = client;
 
-	cdev_init(m5_data->cdev, &acc_ops);
-	m5_data.cdev->cdev.owner = THIS_MODULE;
+	cdev_init(&m5_data->cdev, &acc_ops);
+	m5_data->cdev.owner = THIS_MODULE;
 	err = cdev_add(&m5_data->cdev, dev_no, 1);
 
-	if(IS_ERR(err))
+	if(err)
 	{
 		pr_err("error adding cdev");
 		goto fail;
 	}
 
-	device = device_create(acc_class, NULL, dev_no, NULL, ACC_DEV_NAME);
-	if(IS_ERR(err)){
-		err = PTR_ERR(device);
+	c_dev = device_create(acc_class, NULL, dev_no, NULL, ACC_DEV_NAME);
+	if(err){
+		err = PTR_ERR(c_dev);
 		pr_err("failed to create %s device", ACC_DEV_NAME);
-		cdev_del(m5_data->cdev);
+		cdev_del(&m5_data->cdev);
 		goto fail;
 	}
 
@@ -116,23 +124,24 @@ fail:
 }
 
 static int mma7455_i2c_remove(struct i2c_client *client){
-	struct mma7455 *data = i2c_get_client_data(client);
+	struct mma7455 *data = i2c_get_clientdata(client);
 	device_destroy(acc_class, MKDEV(acc_dev_maj, minor));
 
 	kfree(data);
 	class_destroy(acc_class);
-	unregister_chrdev_region(MKDEV(acc_dev_maj, minor));
+	unregister_chrdev_region(MKDEV(acc_dev_maj, minor),1);
 	return 0;
 }
 
 static struct i2c_device_id mma7455_i2c_ids[] = {
-	{"mma7455","0"},
+	{"mma7455",0},
+	{},
 }; 
 
 MODULE_DEVICE_TABLE(i2c, mma7455_i2c_ids);
 
 static struct i2c_driver mma7455_i2c_driver = {
-	.probe = mma755_i2c_probe,
+	.probe = mma7455_i2c_probe,
 	.remove = mma7455_i2c_remove,
 	.driver = {
 		.name = "mma7455_i2c"
@@ -141,3 +150,6 @@ static struct i2c_driver mma7455_i2c_driver = {
 };
 
 module_i2c_driver (mma7455_i2c_driver);
+
+MODULE_AUTHOR("Srinivasa");
+MODULE_LICENSE("GPL");

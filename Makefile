@@ -9,6 +9,6 @@ all:
 PHONT: .clean
 
 clean:
-	rm *.o *.ko
+	rm *.o *.ko *.mod.c *.order *.symvers
 
 endif
