@@ -42,7 +42,7 @@ const struct i2c_device_id *id)
 	struct device *c_dev;
 	dev_t dev_no;	
 	unsigned int whoami;
-	char *from_accl = NULL;	
+	char from_accl[5];	
 	int err;  /* for c dev allocation */
 	
 	if(!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_BYTE_DATA))
@@ -53,15 +53,16 @@ const struct i2c_device_id *id)
 	msg.flags = I2C_M_RD;
 	msg.len = 5;
 	msg.buf = from_accl;
-	err = kstrtoint(from_accl, 16, &whoami);
-	if(err){
-		pr_err("could not convert str to long");
-		return err;
-	}
 
 	err = i2c_transfer(client->adapter, &msg, 1);
 	if(err){
 		pr_err("i2c transfer failed");
+		return err;
+	}
+
+	err = kstrtoint(from_accl, 16, &whoami);
+	if(err){
+		pr_err("could not convert str to long");
 		return err;
 	}
 
